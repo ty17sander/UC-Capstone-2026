@@ -1,0 +1,55 @@
+name: Weekly data refresh and research run
+
+# Saturday 06:00 UTC -- after Friday's US close has settled.
+on:
+  schedule:
+    - cron: "0 6 * * 6"
+  workflow_dispatch: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # Cache the parquet store between runs so a failed vendor call does
+      # not wipe good history.
+      - uses: actions/cache@v4
+        with:
+          path: .sigplat
+          key: sigplat-data-${{ github.run_id }}
+          restore-keys: sigplat-data-
+
+      - name: Ingest and evaluate
+        env:
+          SIGPLAT_DATA_DIR: ${{ github.workspace }}/.sigplat
+        run: |
+          python run_research.py --live > research_output.txt 2>&1 || \
+            (echo "Live run failed; keeping previous artifacts" && exit 0)
+
+      - name: Validate before publishing
+        env:
+          SIGPLAT_DATA_DIR: ${{ github.workspace }}/.sigplat
+        run: PYTHONPATH=. python tests/test_harness.py
+
+      - name: Publish artifacts
+        run: |
+          mkdir -p published
+          cp -r .sigplat/curated/*.parquet published/ 2>/dev/null || true
+          cp research_output.txt published/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-data
+          path: published/
+          retention-days: 90
