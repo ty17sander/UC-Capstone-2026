@@ -408,5 +408,5 @@ naive test reported p = 0.026.
     """)
 
     st.divider()
-    st.caption("Source: github.com/<ty17sander>/signal-research-platform · "
+    st.caption("Source: github.com/ty17sander/UC-Capstone-2026 · "
                "Built with Python, pandas, statsmodels, DuckDB, and Streamlit.")
